@@ -39,7 +39,7 @@ func makeTestMapping(mode Mode) (*Mapping, error) {
 		return nil, err
 	}
 	defer file.Close()
-	return NewMapping(file.Fd(), 0, testLength, &Options{
+	return New(file.Fd(), 0, testLength, &Options{
 		Mode: mode,
 	})
 }
@@ -50,7 +50,7 @@ func TestOpenedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	mapping, err := NewMapping(file.Fd(), 0, testLength, &Options{
+	mapping, err := New(file.Fd(), 0, testLength, &Options{
 		Mode: ModeReadWrite,
 	})
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
@@ -151,7 +151,7 @@ func TestPartialIO(t *testing.T) {
 	}
 	defer file.Close()
 	partialLength := uintptr(len(testBuffer) - 1)
-	mapping, err := NewMapping(file.Fd(), 0, partialLength, &Options{
+	mapping, err := New(file.Fd(), 0, partialLength, &Options{
 		Mode: ModeReadWrite,
 	})
 	defer mapping.Close()
@@ -180,7 +180,7 @@ func TestOffset(t *testing.T) {
 	}
 	defer file.Close()
 	offLength := uintptr(len(testBuffer) - 1)
-	mapping, err := NewMapping(file.Fd(), 1, offLength, &Options{
+	mapping, err := New(file.Fd(), 1, offLength, &Options{
 		Mode: ModeReadWrite,
 	})
 	defer mapping.Close()

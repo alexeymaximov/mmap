@@ -54,7 +54,7 @@ type Mapping struct {
 	canExecute     bool
 }
 
-func NewMapping(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, error) {
+func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, error) {
 
 	// Using int64 (off_t) for offset and uintptr (size_t) for size by reason of compatibility.
 	if offset < 0 {
