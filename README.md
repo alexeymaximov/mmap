@@ -1,6 +1,6 @@
 Published under MIT license with the permission of NX Studio.
 
-# Memory mapping
+# Memory mapping [![GoDoc](https://godoc.org/github.com/alexeymaximov/mmap?status.svg)](https://godoc.org/github.com/alexeymaximov/mmap) ![](https://img.shields.io/github/license/alexeymaximov/mmap.svg)
 
 This is cross-platform Golang package for memory mapped file I/O with no any dependencies except for Golang standard library.
 
