@@ -46,6 +46,7 @@ func munmap(addr, length uintptr) error {
 	return nil
 }
 
+// Mapping.
 type Mapping struct {
 	alignedAddress uintptr
 	alignedSize    uintptr
@@ -54,6 +55,7 @@ type Mapping struct {
 	canExecute     bool
 }
 
+// Make new mapping of file at unaligned offset.
 func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, error) {
 
 	// Using int64 (off_t) for offset and uintptr (size_t) for size by reason of compatibility.
@@ -114,6 +116,7 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	return mapping, nil
 }
 
+// Synchronize mapping with underlying file (writing must be allowed).
 func (mapping *Mapping) Sync() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
@@ -124,6 +127,8 @@ func (mapping *Mapping) Sync() error {
 	return os.NewSyscallError("msync", msync(mapping.alignedAddress, mapping.alignedSize))
 }
 
+// Close mapping.
+// Implementation of io.Closer.
 func (mapping *Mapping) Close() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
