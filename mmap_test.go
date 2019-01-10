@@ -14,6 +14,12 @@ var testLength = uintptr(1 << 20)
 var testBuffer = []byte{'H', 'E', 'L', 'L', 'O'}
 var emptyBuffer = []byte{0, 0, 0, 0, 0}
 
+func closeSilent(closer io.Closer) {
+	if err := closer.Close(); err != nil {
+		// DO NOTHING
+	}
+}
+
 func makeTestFile(rewrite bool) (*os.File, error) {
 	if rewrite {
 		if _, err := os.Stat(testPath); err == nil || !os.IsNotExist(err) {
@@ -27,7 +33,7 @@ func makeTestFile(rewrite bool) (*os.File, error) {
 		return nil, err
 	}
 	if err := file.Truncate(int64(testLength)); err != nil {
-		file.Close()
+		closeSilent(file)
 		return nil, err
 	}
 	return file, nil
@@ -38,7 +44,7 @@ func makeTestMapping(mode Mode) (*Mapping, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	return New(file.Fd(), 0, testLength, &Options{
 		Mode: mode,
 	})
@@ -49,15 +55,14 @@ func TestOpenedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	mapping, err := New(file.Fd(), 0, testLength, &Options{
 		Mode: ModeReadWrite,
 	})
+	defer closeSilent(mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
-		mapping.Close()
 		t.Fatal(err)
 	}
-	defer mapping.Close()
 	buffer := make([]byte, len(testBuffer))
 	if _, err := mapping.ReadAt(buffer, 0); err != nil {
 		t.Fatal(err)
@@ -75,9 +80,8 @@ func TestClosedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mapping.Close()
+	defer closeSilent(mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
-		mapping.Close()
 		t.Fatal(err)
 	}
 	buffer := make([]byte, len(testBuffer))
@@ -97,7 +101,7 @@ func TestSharedSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mapping.Close()
+	defer closeSilent(mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +112,7 @@ func TestSharedSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	buffer := make([]byte, len(testBuffer))
 	if _, err := file.ReadAt(buffer, 0); err != nil {
 		t.Fatal(err)
@@ -123,7 +127,7 @@ func TestPrivateSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mapping.Close()
+	defer closeSilent(mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +138,7 @@ func TestPrivateSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	buffer := make([]byte, len(testBuffer))
 	if _, err := file.ReadAt(buffer, 0); err != nil {
 		t.Fatal(err)
@@ -149,12 +153,12 @@ func TestPartialIO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	partialLength := uintptr(len(testBuffer) - 1)
 	mapping, err := New(file.Fd(), 0, partialLength, &Options{
 		Mode: ModeReadWrite,
 	})
-	defer mapping.Close()
+	defer closeSilent(mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err == nil {
 		t.Fatal("expected io.EOF, no error found")
 	} else if err != io.EOF {
@@ -178,16 +182,15 @@ func TestOffset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer closeSilent(file)
 	offLength := uintptr(len(testBuffer) - 1)
 	mapping, err := New(file.Fd(), 1, offLength, &Options{
 		Mode: ModeReadWrite,
 	})
-	defer mapping.Close()
+	defer closeSilent(mapping)
 	offBuffer := make([]byte, offLength)
 	copy(offBuffer, testBuffer[1:])
 	if _, err := mapping.WriteAt(offBuffer, 0); err != nil {
-		mapping.Close()
 		t.Fatal(err)
 	}
 	buffer := make([]byte, len(offBuffer))
