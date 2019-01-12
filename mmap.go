@@ -124,32 +124,6 @@ func (mapping *Mapping) Flush() error {
 	return mapping.Sync()
 }
 
-// Read single byte at given offset.
-func (mapping *Mapping) ReadByteAt(offset int64) (byte, error) {
-	if mapping.data == nil {
-		return 0, &ErrorClosed{}
-	}
-	if offset < 0 || offset >= int64(mapping.size) {
-		return 0, &ErrorInvalidOffset{Offset: offset}
-	}
-	return mapping.data[offset], nil
-}
-
-// Write single byte at given offset.
-func (mapping *Mapping) WriteByteAt(byte byte, offset int64) error {
-	if mapping.data == nil {
-		return &ErrorClosed{}
-	}
-	if !mapping.writable {
-		return &ErrorIllegalOperation{Operation: "write"}
-	}
-	if offset < 0 || offset >= int64(mapping.size) {
-		return &ErrorInvalidOffset{Offset: offset}
-	}
-	mapping.data[offset] = byte
-	return nil
-}
-
 // Read len(buffer) bytes at given offset.
 // Implementation of io.ReaderAt.
 func (mapping *Mapping) ReadAt(buffer []byte, offset int64) (int, error) {
