@@ -66,7 +66,7 @@ func (mapping *Mapping) Data() []byte {
 }
 
 // Begin transaction.
-// Mapped data will be copied to heap until commit or rollback.
+// Mapped data will be copied into the heap until commit or rollback.
 func (mapping *Mapping) Begin() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
