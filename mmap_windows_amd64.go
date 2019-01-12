@@ -12,18 +12,16 @@ const maxInt = int(^uint(0) >> 1)
 
 // Mapping.
 type Mapping struct {
+	internal
 	hProcess       syscall.Handle
 	hFile          syscall.Handle
 	hMapping       syscall.Handle
 	alignedAddress uintptr
 	alignedSize    uintptr
-	data           []byte
-	canWrite       bool
-	canExecute     bool
 }
 
 // Make new mapping of file at unaligned offset.
-func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, error) {
+func New(fd uintptr, offset int64, size uintptr, mode Mode, flags Flag) (*Mapping, error) {
 
 	// Using int64 (off_t) for offset and uintptr (size_t) for size by reason of compatibility.
 	if offset < 0 {
@@ -36,26 +34,24 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	mapping := &Mapping{}
 	protection := uint32(syscall.PAGE_READONLY)
 	access := uint32(syscall.FILE_MAP_READ)
-	if options != nil {
-		switch options.Mode {
-		case ModeReadOnly:
-			// NOOP
-		case ModeReadWrite:
-			protection = syscall.PAGE_READWRITE
-			access = syscall.FILE_MAP_WRITE
-			mapping.canWrite = true
-		case ModeReadWritePrivate:
-			protection = syscall.PAGE_WRITECOPY
-			access = syscall.FILE_MAP_COPY
-			mapping.canWrite = true
-		default:
-			return nil, &ErrorInvalidMode{Mode: options.Mode}
-		}
-		if options.Executable {
-			protection <<= 4
-			access |= syscall.FILE_MAP_EXECUTE
-			mapping.canExecute = true
-		}
+	switch mode {
+	case ModeReadOnly:
+		// NOOP
+	case ModeReadWrite:
+		protection = syscall.PAGE_READWRITE
+		access = syscall.FILE_MAP_WRITE
+		mapping.writable = true
+	case ModeWriteCopy:
+		protection = syscall.PAGE_WRITECOPY
+		access = syscall.FILE_MAP_COPY
+		mapping.writable = true
+	default:
+		return nil, &ErrorInvalidMode{Mode: mode}
+	}
+	if flags&FlagExecutable != 0 {
+		protection <<= 4
+		access |= syscall.FILE_MAP_EXECUTE
+		mapping.executable = true
 	}
 
 	// Separate file handle needed to avoid errors on passed file external closing.
@@ -99,6 +95,8 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	if err != nil {
 		return nil, os.NewSyscallError("MapViewOfFile", err)
 	}
+	mapping.address = mapping.alignedAddress + uintptr(innerOffset)
+	mapping.size = size
 
 	// Convert mapping to byte slice at required offset.
 	var sliceHeader struct {
@@ -106,8 +104,8 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 		len  int
 		cap  int
 	}
-	sliceHeader.data = mapping.alignedAddress + uintptr(innerOffset)
-	sliceHeader.len = int(size)
+	sliceHeader.data = mapping.address
+	sliceHeader.len = int(mapping.size)
 	sliceHeader.cap = sliceHeader.len
 	mapping.data = *(*[]byte)(unsafe.Pointer(&sliceHeader))
 
@@ -115,13 +113,13 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	return mapping, nil
 }
 
-// Synchronize mapping with underlying file (writing must be allowed).
+// Synchronize mapping with underlying file.
 func (mapping *Mapping) Sync() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
 	}
-	if !mapping.canWrite {
-		return &ErrorNotAllowed{Operation: "sync"}
+	if !mapping.writable {
+		return &ErrorIllegalOperation{Operation: "sync"}
 	}
 	if err := syscall.FlushViewOfFile(mapping.alignedAddress, mapping.alignedSize); err != nil {
 		return os.NewSyscallError("FlushViewOfFile", err)
@@ -138,7 +136,7 @@ func (mapping *Mapping) Close() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
 	}
-	if mapping.canWrite {
+	if mapping.writable {
 		if err := mapping.Sync(); err != nil {
 			return err
 		}
@@ -152,7 +150,7 @@ func (mapping *Mapping) Close() error {
 	if err := syscall.CloseHandle(mapping.hFile); err != nil {
 		return os.NewSyscallError("CloseHandle", err)
 	}
-	mapping.data = nil
+	*mapping = Mapping{}
 	runtime.SetFinalizer(mapping, nil)
 	return nil
 }

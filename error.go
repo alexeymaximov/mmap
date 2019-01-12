@@ -9,6 +9,13 @@ func (err *ErrorClosed) Error() string {
 	return "mmap: mapping closed"
 }
 
+// Error occurred when operation is illegal.
+type ErrorIllegalOperation struct{ Operation string }
+
+func (err *ErrorIllegalOperation) Error() string {
+	return fmt.Sprintf("mmap: illegal operation (%s)", err.Operation)
+}
+
 // Error occurred when mapping mode is invalid.
 type ErrorInvalidMode struct{ Mode Mode }
 
@@ -23,23 +30,23 @@ func (err *ErrorInvalidOffset) Error() string {
 	return fmt.Sprintf("mmap: invalid offset 0x%x", err.Offset)
 }
 
-// Error occurred when offset range is invalid.
-type ErrorInvalidOffsetRange struct{ Low, High int64 }
-
-func (err *ErrorInvalidOffsetRange) Error() string {
-	return fmt.Sprintf("mmap: invalid offset range 0x%x..0x%x", err.Low, err.High)
-}
-
-// Error occurred when mapping size is invalid.
+// Error occurred when size is invalid.
 type ErrorInvalidSize struct{ Size uintptr }
 
 func (err *ErrorInvalidSize) Error() string {
 	return fmt.Sprintf("mmap: invalid size %d", err.Size)
 }
 
-// Error occurred when operation on mapping is not allowed.
-type ErrorNotAllowed struct{ Operation string }
+// Error occurred when transaction is not started.
+type ErrorTransactionNotStarted struct{}
 
-func (err *ErrorNotAllowed) Error() string {
-	return fmt.Sprintf("mmap: %s is not allowed", err.Operation)
+func (err *ErrorTransactionNotStarted) Error() string {
+	return "mmap: transaction not started"
+}
+
+// Error occurred when transaction is already started.
+type ErrorTransactionStarted struct{}
+
+func (err *ErrorTransactionStarted) Error() string {
+	return "mmap: transaction started"
 }

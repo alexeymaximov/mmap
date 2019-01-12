@@ -48,15 +48,13 @@ func munmap(addr, length uintptr) error {
 
 // Mapping.
 type Mapping struct {
+	internal
 	alignedAddress uintptr
 	alignedSize    uintptr
-	data           []byte
-	canWrite       bool
-	canExecute     bool
 }
 
 // Make new mapping of file at unaligned offset.
-func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, error) {
+func New(fd uintptr, offset int64, size uintptr, mode Mode, flags Flag) (*Mapping, error) {
 
 	// Using int64 (off_t) for offset and uintptr (size_t) for size by reason of compatibility.
 	if offset < 0 {
@@ -68,22 +66,20 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 
 	mapping := &Mapping{}
 	protection := syscall.PROT_READ
-	flags := syscall.MAP_SHARED
-	if options != nil {
-		if options.Mode < ModeReadOnly || options.Mode > ModeReadWritePrivate {
-			return nil, &ErrorInvalidMode{Mode: options.Mode}
-		}
-		if options.Mode > ModeReadOnly {
-			protection |= syscall.PROT_WRITE
-			mapping.canWrite = true
-		}
-		if options.Mode == ModeReadWritePrivate {
-			flags = syscall.MAP_PRIVATE
-		}
-		if options.Executable {
-			protection |= syscall.PROT_EXEC
-			mapping.canExecute = true
-		}
+	mmapFlags := syscall.MAP_SHARED
+	if mode < ModeReadOnly || mode > ModeWriteCopy {
+		return nil, &ErrorInvalidMode{Mode: mode}
+	}
+	if mode > ModeReadOnly {
+		protection |= syscall.PROT_WRITE
+		mapping.writable = true
+	}
+	if mode == ModeWriteCopy {
+		flags = syscall.MAP_PRIVATE
+	}
+	if flags&FlagExecutable != 0 {
+		protection |= syscall.PROT_EXEC
+		mapping.executable = true
 	}
 
 	// Mapping area offset must be aligned by memory page size.
@@ -96,10 +92,12 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	mapping.alignedSize = uintptr(innerOffset) + size
 
 	var err error
-	mapping.alignedAddress, err = mmap(0, mapping.alignedSize, protection, flags, fd, outerOffset)
+	mapping.alignedAddress, err = mmap(0, mapping.alignedSize, protection, mmapFlags, fd, outerOffset)
 	if err != nil {
 		return nil, os.NewSyscallError("mmap", err)
 	}
+	mapping.address = mapping.alignedAddress + uintptr(innerOffset)
+	mapping.size = size
 
 	// Convert mapping to byte slice at required offset.
 	var sliceHeader struct {
@@ -107,8 +105,8 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 		len  int
 		cap  int
 	}
-	sliceHeader.data = mapping.alignedAddress + uintptr(innerOffset)
-	sliceHeader.len = int(size)
+	sliceHeader.data = mapping.address
+	sliceHeader.len = int(mapping.size)
 	sliceHeader.cap = sliceHeader.len
 	mapping.data = *(*[]byte)(unsafe.Pointer(&sliceHeader))
 
@@ -116,13 +114,13 @@ func New(fd uintptr, offset int64, size uintptr, options *Options) (*Mapping, er
 	return mapping, nil
 }
 
-// Synchronize mapping with underlying file (writing must be allowed).
+// Synchronize mapping with underlying file.
 func (mapping *Mapping) Sync() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
 	}
-	if !mapping.canWrite {
-		return &ErrorNotAllowed{Operation: "sync"}
+	if !mapping.writable {
+		return &ErrorIllegalOperation{Operation: "sync"}
 	}
 	return os.NewSyscallError("msync", msync(mapping.alignedAddress, mapping.alignedSize))
 }
@@ -135,7 +133,7 @@ func (mapping *Mapping) Close() error {
 	}
 
 	// Maybe unnecessary.
-	if mapping.canWrite {
+	if mapping.writable {
 		if err := mapping.Sync(); err != nil {
 			return err
 		}
@@ -144,7 +142,7 @@ func (mapping *Mapping) Close() error {
 	if err := munmap(mapping.alignedAddress, mapping.alignedSize); err != nil {
 		return os.NewSyscallError("munmap", err)
 	}
-	mapping.data = nil
+	*mapping = Mapping{}
 	runtime.SetFinalizer(mapping, nil)
 	return nil
 }

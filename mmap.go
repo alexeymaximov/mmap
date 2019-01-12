@@ -2,66 +2,126 @@ package mmap
 
 import "io"
 
-// Mapping access mode.
+// Mapping mode.
 type Mode int
 
 const (
-	// Mapping is shared but only accessible for reading.
+	// Share this mapping and allow read-only access.
 	ModeReadOnly Mode = iota
 
-	// Mapping is shared: updates are visible to other processes mapping the same region,
-	// and are carried through to the underlying file.
+	// Share this mapping. Updates to the mapping are visible to other processes
+	// mapping the same region, and are carried through to the underlying file.
 	// To precisely control when updates are carried through to the underlying file requires the use of Sync.
 	ModeReadWrite
 
-	// Mapping is in copy-on-write mode: updates are not visible to other processes mapping the same region,
-	// and are not carried through to the underlying file.
+	// Create a private copy-on-write mapping. Updates to the mapping are not visible to other processes
+	// mapping the same region, and are not carried through to the underlying file.
 	// It is unspecified whether changes made to the file are visible in the mapped region.
-	ModeReadWritePrivate
+	ModeWriteCopy
 )
 
-// Mapping options.
-type Options struct {
-	Mode       Mode // Access mode.
-	Executable bool // Allow execution.
+// Mapping flags.
+type Flag int
+
+const (
+	// Mapped memory pages may be executed.
+	FlagExecutable Flag = 0x1
+)
+
+type internal struct {
+	writable   bool
+	executable bool
+	address    uintptr
+	size       uintptr
+	data       []byte
+	retained   []byte
 }
 
-// Get mapping length.
-func (mapping *Mapping) Len() int {
-	return len(mapping.data)
+// Check whether mapped memory pages may be written.
+func (mapping *Mapping) Writable() bool {
+	return mapping.writable
 }
 
-// Check whether mapping is available for reading (currently is always available).
-func (mapping *Mapping) CanRead() bool {
-	return true
+// Check whether mapped memory pages may be executed.
+func (mapping *Mapping) Executable() bool {
+	return mapping.executable
 }
 
-// Check whether mapping is available for writing.
-func (mapping *Mapping) CanWrite() bool {
-	return mapping.canWrite
+// Get pointer to mapping start.
+func (mapping *Mapping) Address() uintptr {
+	return mapping.address
 }
 
-// Check whether mapping is available for execution.
-func (mapping *Mapping) CanExecute() bool {
-	return mapping.canExecute
+// Get mapping size in bytes.
+func (mapping *Mapping) Size() uintptr {
+	return mapping.size
 }
 
-// Get byte slice in [low, high) offset range.
-func (mapping *Mapping) Slice(low, high int64) ([]byte, error) {
+// Get mapped data.
+func (mapping *Mapping) Data() []byte {
+	return mapping.data
+}
+
+// Begin transaction.
+// Mapped data will be copied to heap until commit or rollback.
+func (mapping *Mapping) Begin() error {
 	if mapping.data == nil {
-		return nil, &ErrorClosed{}
+		return &ErrorClosed{}
 	}
-	length := int64(len(mapping.data))
-	if low < 0 || low >= length {
-		return nil, &ErrorInvalidOffset{Offset: low}
+	if mapping.retained != nil {
+		return &ErrorTransactionStarted{}
 	}
-	if high < 1 || high > length {
-		return nil, &ErrorInvalidOffset{Offset: high}
+	if !mapping.writable {
+		return &ErrorIllegalOperation{Operation: "transaction"}
 	}
-	if low >= high {
-		return nil, &ErrorInvalidOffsetRange{Low: low, High: high - 1}
+	snapshot := make([]byte, mapping.size)
+	copy(snapshot, mapping.data)
+	mapping.retained = mapping.data
+	mapping.data = snapshot
+	return nil
+}
+
+// Rollback transaction.
+func (mapping *Mapping) Rollback() error {
+	if mapping.data == nil {
+		return &ErrorClosed{}
 	}
-	return mapping.data[low:high], nil
+	if mapping.retained == nil {
+		return &ErrorTransactionNotStarted{}
+	}
+	mapping.data = mapping.retained
+	mapping.retained = nil
+	return nil
+}
+
+// Commit transaction.
+func (mapping *Mapping) Commit() error {
+	if mapping.data == nil {
+		return &ErrorClosed{}
+	}
+	if mapping.retained == nil {
+		return &ErrorTransactionNotStarted{}
+	}
+	copy(mapping.retained, mapping.data)
+	mapping.data = mapping.retained
+	mapping.retained = nil
+	return nil
+}
+
+// Commit transaction if started and synchronize mapping with underlying file.
+func (mapping *Mapping) Flush() error {
+	if mapping.data == nil {
+		return &ErrorClosed{}
+	}
+	if !mapping.writable {
+		return &ErrorIllegalOperation{Operation: "flush"}
+	}
+	if mapping.retained != nil {
+		if err := mapping.Commit(); err != nil {
+			return err
+		}
+	}
+	return mapping.Sync()
 }
 
 // Read single byte at given offset.
@@ -69,7 +129,7 @@ func (mapping *Mapping) ReadByteAt(offset int64) (byte, error) {
 	if mapping.data == nil {
 		return 0, &ErrorClosed{}
 	}
-	if offset < 0 || offset >= int64(len(mapping.data)) {
+	if offset < 0 || offset >= int64(mapping.size) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
 	return mapping.data[offset], nil
@@ -80,10 +140,10 @@ func (mapping *Mapping) WriteByteAt(byte byte, offset int64) error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
 	}
-	if !mapping.canWrite {
-		return &ErrorNotAllowed{Operation: "write"}
+	if !mapping.writable {
+		return &ErrorIllegalOperation{Operation: "write"}
 	}
-	if offset < 0 || offset >= int64(len(mapping.data)) {
+	if offset < 0 || offset >= int64(mapping.size) {
 		return &ErrorInvalidOffset{Offset: offset}
 	}
 	mapping.data[offset] = byte
@@ -96,7 +156,7 @@ func (mapping *Mapping) ReadAt(buffer []byte, offset int64) (int, error) {
 	if mapping.data == nil {
 		return 0, &ErrorClosed{}
 	}
-	if offset < 0 || offset >= int64(len(mapping.data)) {
+	if offset < 0 || offset >= int64(mapping.size) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
 	n := copy(buffer, mapping.data[offset:])
@@ -112,10 +172,10 @@ func (mapping *Mapping) WriteAt(buffer []byte, offset int64) (int, error) {
 	if mapping.data == nil {
 		return 0, &ErrorClosed{}
 	}
-	if !mapping.canWrite {
-		return 0, &ErrorNotAllowed{Operation: "write"}
+	if !mapping.writable {
+		return 0, &ErrorIllegalOperation{Operation: "write"}
 	}
-	if offset < 0 || offset >= int64(len(mapping.data)) {
+	if offset < 0 || offset >= int64(mapping.size) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
 	n := copy(mapping.data[offset:], buffer)
