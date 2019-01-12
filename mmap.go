@@ -9,12 +9,15 @@ const (
 	// Share this mapping and allow read-only access.
 	ModeReadOnly Mode = iota
 
-	// Share this mapping. Updates to the mapping are visible to other processes
+	// Share this mapping.
+	// Updates to the mapping are visible to other processes
 	// mapping the same region, and are carried through to the underlying file.
-	// To precisely control when updates are carried through to the underlying file requires the use of Sync.
+	// To precisely control when updates are carried through to the underlying file
+	// requires the use of Sync.
 	ModeReadWrite
 
-	// Create a private copy-on-write mapping. Updates to the mapping are not visible to other processes
+	// Create a private copy-on-write mapping.
+	// Updates to the mapping are not visible to other processes
 	// mapping the same region, and are not carried through to the underlying file.
 	// It is unspecified whether changes made to the file are visible in the mapped region.
 	ModeWriteCopy
