@@ -111,7 +111,7 @@ func (mapping *Mapping) Commit() error {
 	return nil
 }
 
-// Commit transaction if started and synchronize mapping with underlying file.
+// Commit transaction if started and synchronize mapping with the underlying file.
 func (mapping *Mapping) Flush() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}

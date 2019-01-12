@@ -113,7 +113,7 @@ func New(fd uintptr, offset int64, size uintptr, mode Mode, flags Flag) (*Mappin
 	return mapping, nil
 }
 
-// Synchronize mapping with underlying file.
+// Synchronize mapping with the underlying file.
 func (mapping *Mapping) Sync() error {
 	if mapping.data == nil {
 		return &ErrorClosed{}
