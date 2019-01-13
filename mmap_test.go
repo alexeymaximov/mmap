@@ -9,7 +9,7 @@ import (
 )
 
 var testPath = filepath.Join(os.TempDir(), "test.mmap")
-var testSize = uintptr(1 << 20)
+var testLength = uintptr(1 << 20)
 
 var testBuffer = []byte{'H', 'E', 'L', 'L', 'O'}
 var emptyBuffer = []byte{0, 0, 0, 0, 0}
@@ -34,7 +34,7 @@ func makeTestFile(t *testing.T, rewrite bool) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := file.Truncate(int64(testSize)); err != nil {
+	if err := file.Truncate(int64(testLength)); err != nil {
 		testClose(t, file)
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func makeTestMapping(t *testing.T, mode Mode) (*Mapping, error) {
 		return nil, err
 	}
 	defer testClose(t, file)
-	return New(file.Fd(), 0, testSize, mode, 0)
+	return New(file.Fd(), 0, testLength, mode, 0)
 }
 
 func TestOpenedFile(t *testing.T) {
@@ -56,7 +56,7 @@ func TestOpenedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer testClose(t, file)
-	mapping, err := New(file.Fd(), 0, testSize, ModeReadWrite, 0)
+	mapping, err := New(file.Fd(), 0, testLength, ModeReadWrite, 0)
 	defer testClose(t, mapping)
 	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
 		t.Fatal(err)

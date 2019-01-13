@@ -35,9 +35,9 @@ type internal struct {
 	writable   bool
 	executable bool
 	address    uintptr
-	size       uintptr
-	data       []byte
-	retained   []byte
+	length     uintptr
+	memory     []byte
+	backup     []byte
 }
 
 // Check whether mapped memory pages may be written.
@@ -50,76 +50,76 @@ func (mapping *Mapping) Executable() bool {
 	return mapping.executable
 }
 
-// Get pointer to mapping start.
+// Get pointer to mapped memory.
 func (mapping *Mapping) Address() uintptr {
 	return mapping.address
 }
 
-// Get mapping size in bytes.
-func (mapping *Mapping) Size() uintptr {
-	return mapping.size
+// Get mapped memory length in bytes.
+func (mapping *Mapping) Length() uintptr {
+	return mapping.length
 }
 
-// Get mapped data.
-func (mapping *Mapping) Data() []byte {
-	return mapping.data
+// Get mapped memory as byte slice.
+func (mapping *Mapping) Memory() []byte {
+	return mapping.memory
 }
 
 // Begin transaction.
-// Mapped data will be copied into the heap until commit or rollback.
+// Mapped memory will be copied into the heap until commit or rollback.
 func (mapping *Mapping) Begin() error {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return &ErrorClosed{}
 	}
-	if mapping.retained != nil {
+	if mapping.backup != nil {
 		return &ErrorTransactionStarted{}
 	}
 	if !mapping.writable {
 		return &ErrorIllegalOperation{Operation: "transaction"}
 	}
-	snapshot := make([]byte, mapping.size)
-	copy(snapshot, mapping.data)
-	mapping.retained = mapping.data
-	mapping.data = snapshot
+	snapshot := make([]byte, mapping.length)
+	copy(snapshot, mapping.memory)
+	mapping.backup = mapping.memory
+	mapping.memory = snapshot
 	return nil
 }
 
 // Rollback transaction.
 func (mapping *Mapping) Rollback() error {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return &ErrorClosed{}
 	}
-	if mapping.retained == nil {
+	if mapping.backup == nil {
 		return &ErrorTransactionNotStarted{}
 	}
-	mapping.data = mapping.retained
-	mapping.retained = nil
+	mapping.memory = mapping.backup
+	mapping.backup = nil
 	return nil
 }
 
 // Commit transaction.
 func (mapping *Mapping) Commit() error {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return &ErrorClosed{}
 	}
-	if mapping.retained == nil {
+	if mapping.backup == nil {
 		return &ErrorTransactionNotStarted{}
 	}
-	copy(mapping.retained, mapping.data)
-	mapping.data = mapping.retained
-	mapping.retained = nil
+	copy(mapping.backup, mapping.memory)
+	mapping.memory = mapping.backup
+	mapping.backup = nil
 	return nil
 }
 
 // Commit transaction if started and synchronize mapping with the underlying file.
 func (mapping *Mapping) Flush() error {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return &ErrorClosed{}
 	}
 	if !mapping.writable {
 		return &ErrorIllegalOperation{Operation: "flush"}
 	}
-	if mapping.retained != nil {
+	if mapping.backup != nil {
 		if err := mapping.Commit(); err != nil {
 			return err
 		}
@@ -130,13 +130,13 @@ func (mapping *Mapping) Flush() error {
 // Read len(buffer) bytes at given offset.
 // Implementation of io.ReaderAt.
 func (mapping *Mapping) ReadAt(buffer []byte, offset int64) (int, error) {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return 0, &ErrorClosed{}
 	}
-	if offset < 0 || offset >= int64(mapping.size) {
+	if offset < 0 || offset >= int64(mapping.length) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
-	n := copy(buffer, mapping.data[offset:])
+	n := copy(buffer, mapping.memory[offset:])
 	if n < len(buffer) {
 		return n, io.EOF
 	}
@@ -146,16 +146,16 @@ func (mapping *Mapping) ReadAt(buffer []byte, offset int64) (int, error) {
 // Write len(buffer) bytes at given offset.
 // Implementation of io.WriterAt.
 func (mapping *Mapping) WriteAt(buffer []byte, offset int64) (int, error) {
-	if mapping.data == nil {
+	if mapping.memory == nil {
 		return 0, &ErrorClosed{}
 	}
 	if !mapping.writable {
 		return 0, &ErrorIllegalOperation{Operation: "write"}
 	}
-	if offset < 0 || offset >= int64(mapping.size) {
+	if offset < 0 || offset >= int64(mapping.length) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
-	n := copy(mapping.data[offset:], buffer)
+	n := copy(mapping.memory[offset:], buffer)
 	if n < len(buffer) {
 		return n, io.EOF
 	}

@@ -30,11 +30,18 @@ func (err *ErrorInvalidOffset) Error() string {
 	return fmt.Sprintf("mmap: invalid offset 0x%x", err.Offset)
 }
 
-// Error occurred when size is invalid.
-type ErrorInvalidSize struct{ Size uintptr }
+// Error occurred when length is invalid.
+type ErrorInvalidLength struct{ Length uintptr }
 
-func (err *ErrorInvalidSize) Error() string {
-	return fmt.Sprintf("mmap: invalid size %d", err.Size)
+func (err *ErrorInvalidLength) Error() string {
+	return fmt.Sprintf("mmap: invalid length %d", err.Length)
+}
+
+// Error occurred when mapping memory pages are already locked.
+type ErrorLocked struct{}
+
+func (err *ErrorLocked) Error() string {
+	return "mmap: mapping locked"
 }
 
 // Error occurred when transaction is not started.
@@ -49,4 +56,11 @@ type ErrorTransactionStarted struct{}
 
 func (err *ErrorTransactionStarted) Error() string {
 	return "mmap: transaction started"
+}
+
+// Error occurred when mapping memory pages are not locked.
+type ErrorUnlocked struct{}
+
+func (err *ErrorUnlocked) Error() string {
+	return "mmap: mapping unlocked"
 }
