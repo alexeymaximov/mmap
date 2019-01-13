@@ -71,7 +71,7 @@ type Mapping struct {
 }
 
 // Make new mapping.
-// Actual mapping offset and length may be different than specified
+// Actual offset and length may be different than specified
 // by the reason of aligning to page size.
 func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapping, error) {
 
