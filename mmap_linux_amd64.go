@@ -62,7 +62,7 @@ func munmap(addr, length uintptr) error {
 	return nil
 }
 
-// Mapping represents a mapping of file into the memory.
+// Mapping is a mapping of file into the memory.
 type Mapping struct {
 	internal
 	alignedAddress uintptr

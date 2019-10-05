@@ -10,7 +10,7 @@ import (
 
 const maxInt = int(^uint(0) >> 1)
 
-// Mapping represents a mapping of file into the memory.
+// Mapping is a mapping of file into the memory.
 type Mapping struct {
 	internal
 	hProcess       syscall.Handle
