@@ -40,37 +40,32 @@ type internal struct {
 	memory     []byte
 }
 
-// Writable returns true if mapped memory pages may be written.
+// Writable returns true if the mapped memory pages may be written.
 func (m *Mapping) Writable() bool {
 	return m.writable
 }
 
-// Executable returns true if mapped memory pages may be executed.
+// Executable returns true if the mapped memory pages may be executed.
 func (m *Mapping) Executable() bool {
 	return m.executable
 }
 
-// Address returns pointer to mapped memory.
+// Address returns pointer to the mapped memory.
 func (m *Mapping) Address() uintptr {
 	return m.address
 }
 
-// Length returns mapped memory length in bytes.
+// Length returns the mapped memory length in bytes.
 func (m *Mapping) Length() uintptr {
 	return uintptr(len(m.memory))
 }
 
-// Memory returns mapped memory as a byte slice.
+// Memory returns the mapped memory as a byte slice.
 func (m *Mapping) Memory() []byte {
 	return m.memory
 }
 
-// Begin starts the transaction for this mapping.
-func (m *Mapping) Begin(offset int64, length uintptr) (*Transaction, error) {
-	return NewTransaction(m, offset, length)
-}
-
-// Read reads len(buf) bytes at given offset from mapped memory.
+// Read reads len(buf) bytes at given offset from the mapped memory.
 // Implementation of io.ReaderAt.
 func (m *Mapping) ReadAt(buf []byte, offset int64) (int, error) {
 	if m.memory == nil {
@@ -86,7 +81,7 @@ func (m *Mapping) ReadAt(buf []byte, offset int64) (int, error) {
 	return n, nil
 }
 
-// Write writes len(buf) bytes at given offset to mapped memory.
+// Write writes len(buf) bytes at given offset to the mapped memory.
 // Implementation of io.WriterAt.
 func (m *Mapping) WriteAt(buf []byte, offset int64) (int, error) {
 	if m.memory == nil {

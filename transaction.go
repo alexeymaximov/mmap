@@ -5,8 +5,8 @@ import (
 	"runtime"
 )
 
-// Transaction is a transaction over the mapping.
-// The transaction is not valid if parent mapping is closed.
+// Transaction is a memory mapping transaction.
+// The transaction is not valid if the parent mapping is closed.
 type Transaction struct {
 	mapping    *Mapping
 	offset     int64
@@ -14,9 +14,10 @@ type Transaction struct {
 	snapshot   []byte
 }
 
-// NewTransaction returns a new transaction over the specified mapping.
-// Transaction snapshot allocating into the heap starts at specified offset and has specified length.
-func NewTransaction(m *Mapping, offset int64, length uintptr) (*Transaction, error) {
+// Begin starts a transaction.
+// Mapped memory starting from given offset and ends after given length
+// copies to the transaction snapshot which is allocated into the heap.
+func (m *Mapping) Begin(offset int64, length uintptr) (*Transaction, error) {
 	if m.memory == nil {
 		return nil, &ErrorClosed{}
 	}
@@ -41,17 +42,17 @@ func NewTransaction(m *Mapping, offset int64, length uintptr) (*Transaction, err
 	return tx, nil
 }
 
-// Offset returns starting offset of this transaction.
+// Offset returns the starting offset of this transaction.
 func (tx *Transaction) Offset() int64 {
 	return tx.offset
 }
 
-// Length returns snapshot length in bytes.
+// Length returns the snapshot length in bytes.
 func (tx *Transaction) Length() uintptr {
 	return uintptr(len(tx.snapshot))
 }
 
-// Read reads len(buf) bytes at given offset relatively to parent mapping address from the snapshot.
+// Read reads len(buf) bytes at given offset relatively to the parent mapping address from the snapshot.
 // Implementation of io.ReaderAt.
 func (tx *Transaction) ReadAt(buf []byte, offset int64) (int, error) {
 	if tx.snapshot == nil {
@@ -67,7 +68,7 @@ func (tx *Transaction) ReadAt(buf []byte, offset int64) (int, error) {
 	return n, nil
 }
 
-// Write writes len(buf) bytes at given offset relatively to parent mapping address to the snapshot.
+// Write writes len(buf) bytes at given offset relatively to the parent mapping address to the snapshot.
 // Implementation of io.WriterAt.
 func (tx *Transaction) WriteAt(buf []byte, offset int64) (int, error) {
 	if tx.snapshot == nil {
@@ -83,7 +84,7 @@ func (tx *Transaction) WriteAt(buf []byte, offset int64) (int, error) {
 	return n, nil
 }
 
-// Commit flushes snapshot to mapped memory, closes this transaction and frees all resources associated with it.
+// Commit flushes the snapshot to the mapped memory, closes this transaction and frees all resources associated with it.
 func (tx *Transaction) Commit() error {
 	if tx.snapshot == nil {
 		return &ErrorTransactionClosed{}
@@ -92,18 +93,10 @@ func (tx *Transaction) Commit() error {
 		return &ErrorClosed{}
 	}
 	if n := copy(tx.mapping.memory[tx.offset:tx.highOffset], tx.snapshot); n < len(tx.snapshot) {
-		return &ErrorPartialCommit{BytesCommitted: n}
+		return &ErrorPartialCommit{NumBytes: n}
 	}
 	tx.snapshot = nil
 	return nil
-}
-
-// Flush commits this transaction and synchronize parent mapping with the underlying file.
-func (tx *Transaction) Flush() error {
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return tx.mapping.Sync()
 }
 
 // Rollback closes this transaction and frees all resources associated with it.

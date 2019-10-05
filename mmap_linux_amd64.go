@@ -62,7 +62,7 @@ func munmap(addr, length uintptr) error {
 	return nil
 }
 
-// Mapping is a mapping of file into the memory.
+// Mapping is a mapping of the file into the memory.
 type Mapping struct {
 	internal
 	alignedAddress uintptr
@@ -70,11 +70,11 @@ type Mapping struct {
 	locked         bool
 }
 
-// New returns a new mapping of file into the memory.
-// Actual offset and length may be different than specified by the reason of aligning to page size.
+// New returns a new mapping of the file into the memory.
+// Actual offset and length may be different than the specified by the reason of aligning to page size.
 func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapping, error) {
 
-	// Using int64 (off_t) for offset and uintptr (size_t) for length by reason of compatibility.
+	// Using int64 (off_t) for offset and uintptr (size_t) for the length by reason of compatibility.
 	if offset < 0 {
 		return nil, &ErrorInvalidOffset{Offset: offset}
 	}
@@ -100,7 +100,7 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 		m.executable = true
 	}
 
-	// Mapping offset must be aligned by memory page size.
+	// Mapping offset must be aligned by the memory page size.
 	pageSize := int64(os.Getpagesize())
 	if pageSize < 0 {
 		return nil, os.NewSyscallError("getpagesize", syscall.EINVAL)
@@ -116,7 +116,7 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 	}
 	m.address = m.alignedAddress + uintptr(innerOffset)
 
-	// Convert mapping to byte slice at required offset.
+	// Convert the mapping into a byte slice.
 	var sliceHeader struct {
 		data uintptr
 		len  int
@@ -131,7 +131,7 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 	return m, nil
 }
 
-// Lock locks mapped memory pages.
+// Lock locks the mapped memory pages.
 // All pages that contain a part of mapping address range
 // are guaranteed to be resident in RAM when the call returns successfully.
 // The pages are guaranteed to stay in RAM until later unlocked.
@@ -151,7 +151,7 @@ func (m *Mapping) Lock() error {
 	return nil
 }
 
-// Unlock unlocks mapped memory pages.
+// Unlock unlocks the mapped memory pages.
 func (m *Mapping) Unlock() error {
 	if m.memory == nil {
 		return &ErrorClosed{}
@@ -166,7 +166,7 @@ func (m *Mapping) Unlock() error {
 	return nil
 }
 
-// Sync synchronizes mapping with the underlying file.
+// Sync synchronizes this mapping with the underlying file.
 func (m *Mapping) Sync() error {
 	if m.memory == nil {
 		return &ErrorClosed{}
