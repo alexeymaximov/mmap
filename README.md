@@ -11,10 +11,3 @@ Currently has been tested on following architectures:
 ## Installation
 
 `$ go get github.com/alexeymaximov/mmap`
-
-## TODO
-
-* Support of all architectures which are available in Golang.
-* Working set management on Windows.
-* RLimit management on Linux.
-* Memory segment interface (accessing typical integer values by offset).
