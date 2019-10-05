@@ -2,7 +2,7 @@ package mmap
 
 import "fmt"
 
-// ErrorCloses is an error which returns when tries to access the closed mapping.
+// ErrorClosed is an error which returns when tries to access the closed mapping.
 type ErrorClosed struct{}
 
 // Implementation of the error interface.
