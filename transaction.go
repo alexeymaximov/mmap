@@ -51,7 +51,7 @@ func (tx *Transaction) Length() uintptr {
 	return uintptr(len(tx.snapshot))
 }
 
-// Read reads len(buf) bytes at given offset from the snapshot.
+// Read reads len(buf) bytes at given offset relatively to parent mapping address from the snapshot.
 // Implementation of io.ReaderAt.
 func (tx *Transaction) ReadAt(buf []byte, offset int64) (int, error) {
 	if tx.snapshot == nil {
@@ -67,7 +67,7 @@ func (tx *Transaction) ReadAt(buf []byte, offset int64) (int, error) {
 	return n, nil
 }
 
-// Write writes len(buf) bytes at given offset to the snapshot.
+// Write writes len(buf) bytes at given offset relatively to parent mapping address to the snapshot.
 // Implementation of io.WriterAt.
 func (tx *Transaction) WriteAt(buf []byte, offset int64) (int, error) {
 	if tx.snapshot == nil {
