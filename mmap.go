@@ -1,8 +1,10 @@
+// Package mmap provides the cross-platform memory mapped file I/O.
+// Note than all provided tools are not thread safe.
 package mmap
 
 import "io"
 
-// Mapping mode.
+// Mode is a mapping mode.
 type Mode int
 
 const (
@@ -23,7 +25,7 @@ const (
 	ModeWriteCopy
 )
 
-// Mapping flags.
+// Flags is a mapping flags.
 type Flag int
 
 const (
@@ -35,128 +37,69 @@ type internal struct {
 	writable   bool
 	executable bool
 	address    uintptr
-	length     uintptr
 	memory     []byte
-	backup     []byte
 }
 
-// Check whether mapped memory pages may be written.
-func (mapping *Mapping) Writable() bool {
-	return mapping.writable
+// Writable returns true if mapped memory pages may be written.
+func (m *Mapping) Writable() bool {
+	return m.writable
 }
 
-// Check whether mapped memory pages may be executed.
-func (mapping *Mapping) Executable() bool {
-	return mapping.executable
+// Executable returns true if mapped memory pages may be executed.
+func (m *Mapping) Executable() bool {
+	return m.executable
 }
 
-// Get pointer to mapped memory.
-func (mapping *Mapping) Address() uintptr {
-	return mapping.address
+// Address returns pointer to mapped memory.
+func (m *Mapping) Address() uintptr {
+	return m.address
 }
 
-// Get mapped memory length in bytes.
-func (mapping *Mapping) Length() uintptr {
-	return mapping.length
+// Length returns mapped memory length in bytes.
+func (m *Mapping) Length() uintptr {
+	return uintptr(len(m.memory))
 }
 
-// Get mapped memory as byte slice.
-func (mapping *Mapping) Memory() []byte {
-	return mapping.memory
+// Memory returns mapped memory as a byte slice.
+func (m *Mapping) Memory() []byte {
+	return m.memory
 }
 
-// Begin transaction.
-// Mapped memory will be copied into the heap until commit or rollback.
-func (mapping *Mapping) Begin() error {
-	if mapping.memory == nil {
-		return &ErrorClosed{}
-	}
-	if mapping.backup != nil {
-		return &ErrorTransactionStarted{}
-	}
-	if !mapping.writable {
-		return &ErrorIllegalOperation{Operation: "transaction"}
-	}
-	snapshot := make([]byte, mapping.length)
-	copy(snapshot, mapping.memory)
-	mapping.backup = mapping.memory
-	mapping.memory = snapshot
-	return nil
+// Begin starts the transaction for this mapping.
+func (m *Mapping) Begin(offset int64, length uintptr) (*Transaction, error) {
+	return NewTransaction(m, offset, length)
 }
 
-// Rollback transaction.
-func (mapping *Mapping) Rollback() error {
-	if mapping.memory == nil {
-		return &ErrorClosed{}
-	}
-	if mapping.backup == nil {
-		return &ErrorTransactionNotStarted{}
-	}
-	mapping.memory = mapping.backup
-	mapping.backup = nil
-	return nil
-}
-
-// Commit transaction.
-func (mapping *Mapping) Commit() error {
-	if mapping.memory == nil {
-		return &ErrorClosed{}
-	}
-	if mapping.backup == nil {
-		return &ErrorTransactionNotStarted{}
-	}
-	copy(mapping.backup, mapping.memory)
-	mapping.memory = mapping.backup
-	mapping.backup = nil
-	return nil
-}
-
-// Commit transaction if started and synchronize mapping with the underlying file.
-func (mapping *Mapping) Flush() error {
-	if mapping.memory == nil {
-		return &ErrorClosed{}
-	}
-	if !mapping.writable {
-		return &ErrorIllegalOperation{Operation: "flush"}
-	}
-	if mapping.backup != nil {
-		if err := mapping.Commit(); err != nil {
-			return err
-		}
-	}
-	return mapping.Sync()
-}
-
-// Read len(buffer) bytes at given offset.
+// Read reads len(buf) bytes at given offset from mapped memory.
 // Implementation of io.ReaderAt.
-func (mapping *Mapping) ReadAt(buffer []byte, offset int64) (int, error) {
-	if mapping.memory == nil {
+func (m *Mapping) ReadAt(buf []byte, offset int64) (int, error) {
+	if m.memory == nil {
 		return 0, &ErrorClosed{}
 	}
-	if offset < 0 || offset >= int64(mapping.length) {
+	if offset < 0 || offset >= int64(len(m.memory)) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
-	n := copy(buffer, mapping.memory[offset:])
-	if n < len(buffer) {
+	n := copy(buf, m.memory[offset:])
+	if n < len(buf) {
 		return n, io.EOF
 	}
 	return n, nil
 }
 
-// Write len(buffer) bytes at given offset.
+// Write writes len(buf) bytes at given offset to mapped memory.
 // Implementation of io.WriterAt.
-func (mapping *Mapping) WriteAt(buffer []byte, offset int64) (int, error) {
-	if mapping.memory == nil {
+func (m *Mapping) WriteAt(buf []byte, offset int64) (int, error) {
+	if m.memory == nil {
 		return 0, &ErrorClosed{}
 	}
-	if !mapping.writable {
+	if !m.writable {
 		return 0, &ErrorIllegalOperation{Operation: "write"}
 	}
-	if offset < 0 || offset >= int64(mapping.length) {
+	if offset < 0 || offset >= int64(len(m.memory)) {
 		return 0, &ErrorInvalidOffset{Offset: offset}
 	}
-	n := copy(mapping.memory[offset:], buffer)
-	if n < len(buffer) {
+	n := copy(m.memory[offset:], buf)
+	if n < len(buf) {
 		return n, io.EOF
 	}
 	return n, nil

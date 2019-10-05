@@ -202,13 +202,14 @@ func TestTransactionRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer testClose(t, mapping)
-	if err := mapping.Begin(); err != nil {
+	tx, err := mapping.Begin(0, mapping.Length())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
+	if _, err := tx.WriteAt(testBuffer, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := mapping.Rollback(); err != nil {
+	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
 	buffer := make([]byte, len(emptyBuffer))
@@ -226,13 +227,14 @@ func TestTransactionCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer testClose(t, mapping)
-	if err := mapping.Begin(); err != nil {
+	tx, err := mapping.Begin(0, mapping.Length())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mapping.WriteAt(testBuffer, 0); err != nil {
+	if _, err := tx.WriteAt(testBuffer, 0); err != nil {
 		t.Fatal(err)
 	}
-	if err := mapping.Flush(); err != nil {
+	if err := tx.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	buffer := make([]byte, len(testBuffer))

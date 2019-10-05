@@ -62,7 +62,7 @@ func munmap(addr, length uintptr) error {
 	return nil
 }
 
-// Mapping.
+// Mapping represents a mapping of file into the memory.
 type Mapping struct {
 	internal
 	alignedAddress uintptr
@@ -70,9 +70,8 @@ type Mapping struct {
 	locked         bool
 }
 
-// Make new mapping.
-// Actual offset and length may be different than specified
-// by the reason of aligning to page size.
+// New returns a new mapping of file into the memory.
+// Actual offset and length may be different than specified by the reason of aligning to page size.
 func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapping, error) {
 
 	// Using int64 (off_t) for offset and uintptr (size_t) for length by reason of compatibility.
@@ -83,22 +82,22 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 		return nil, &ErrorInvalidLength{Length: length}
 	}
 
-	mapping := &Mapping{}
-	protection := syscall.PROT_READ
+	m := &Mapping{}
+	prot := syscall.PROT_READ
 	mmapFlags := syscall.MAP_SHARED
 	if mode < ModeReadOnly || mode > ModeWriteCopy {
 		return nil, &ErrorInvalidMode{Mode: mode}
 	}
 	if mode > ModeReadOnly {
-		protection |= syscall.PROT_WRITE
-		mapping.writable = true
+		prot |= syscall.PROT_WRITE
+		m.writable = true
 	}
 	if mode == ModeWriteCopy {
 		flags = syscall.MAP_PRIVATE
 	}
 	if flags&FlagExecutable != 0 {
-		protection |= syscall.PROT_EXEC
-		mapping.executable = true
+		prot |= syscall.PROT_EXEC
+		m.executable = true
 	}
 
 	// Mapping offset must be aligned by memory page size.
@@ -108,15 +107,14 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 	}
 	outerOffset := offset / pageSize
 	innerOffset := offset % pageSize
-	mapping.alignedLength = uintptr(innerOffset) + length
+	m.alignedLength = uintptr(innerOffset) + length
 
 	var err error
-	mapping.alignedAddress, err = mmap(0, mapping.alignedLength, protection, mmapFlags, fd, outerOffset)
+	m.alignedAddress, err = mmap(0, m.alignedLength, prot, mmapFlags, fd, outerOffset)
 	if err != nil {
 		return nil, os.NewSyscallError("mmap", err)
 	}
-	mapping.address = mapping.alignedAddress + uintptr(innerOffset)
-	mapping.length = length
+	m.address = m.alignedAddress + uintptr(innerOffset)
 
 	// Convert mapping to byte slice at required offset.
 	var sliceHeader struct {
@@ -124,84 +122,85 @@ func New(fd uintptr, offset int64, length uintptr, mode Mode, flags Flag) (*Mapp
 		len  int
 		cap  int
 	}
-	sliceHeader.data = mapping.address
-	sliceHeader.len = int(mapping.length)
+	sliceHeader.data = m.address
+	sliceHeader.len = int(length)
 	sliceHeader.cap = sliceHeader.len
-	mapping.memory = *(*[]byte)(unsafe.Pointer(&sliceHeader))
+	m.memory = *(*[]byte)(unsafe.Pointer(&sliceHeader))
 
-	runtime.SetFinalizer(mapping, (*Mapping).Close)
-	return mapping, nil
+	runtime.SetFinalizer(m, (*Mapping).Close)
+	return m, nil
 }
 
-// Lock mapped memory pages.
+// Lock locks mapped memory pages.
 // All pages that contain a part of mapping address range
 // are guaranteed to be resident in RAM when the call returns successfully.
 // The pages are guaranteed to stay in RAM until later unlocked.
 // It may need to increase process memory limits for operation success.
 // See working set on Windows and rlimit on Linux for details.
-func (mapping *Mapping) Lock() error {
-	if mapping.memory == nil {
+func (m *Mapping) Lock() error {
+	if m.memory == nil {
 		return &ErrorClosed{}
 	}
-	if mapping.locked {
+	if m.locked {
 		return &ErrorLocked{}
 	}
-	if err := mlock(mapping.alignedAddress, mapping.alignedLength); err != nil {
+	if err := mlock(m.alignedAddress, m.alignedLength); err != nil {
 		return os.NewSyscallError("mlock", err)
 	}
-	mapping.locked = true
+	m.locked = true
 	return nil
 }
 
-// Unlock mapped memory pages.
-func (mapping *Mapping) Unlock() error {
-	if mapping.memory == nil {
+// Unlock unlocks mapped memory pages.
+func (m *Mapping) Unlock() error {
+	if m.memory == nil {
 		return &ErrorClosed{}
 	}
-	if !mapping.locked {
+	if !m.locked {
 		return &ErrorUnlocked{}
 	}
-	if err := munlock(mapping.alignedAddress, mapping.alignedLength); err != nil {
+	if err := munlock(m.alignedAddress, m.alignedLength); err != nil {
 		return os.NewSyscallError("munlock", err)
 	}
-	mapping.locked = false
+	m.locked = false
 	return nil
 }
 
-// Synchronize mapping with the underlying file.
-func (mapping *Mapping) Sync() error {
-	if mapping.memory == nil {
+// Sync synchronizes mapping with the underlying file.
+func (m *Mapping) Sync() error {
+	if m.memory == nil {
 		return &ErrorClosed{}
 	}
-	if !mapping.writable {
+	if !m.writable {
 		return &ErrorIllegalOperation{Operation: "sync"}
 	}
-	return os.NewSyscallError("msync", msync(mapping.alignedAddress, mapping.alignedLength))
+	return os.NewSyscallError("msync", msync(m.alignedAddress, m.alignedLength))
 }
 
-// Close mapping. Mapping will be synchronized with the underlying file and unlocked automatically.
+// Close closes this mapping and frees all resources associated with it.
+// Mapping will be synchronized with the underlying file and unlocked automatically.
 // Implementation of io.Closer.
-func (mapping *Mapping) Close() error {
-	if mapping.memory == nil {
+func (m *Mapping) Close() error {
+	if m.memory == nil {
 		return &ErrorClosed{}
 	}
 
 	// Maybe unnecessary.
-	if mapping.writable {
-		if err := mapping.Sync(); err != nil {
+	if m.writable {
+		if err := m.Sync(); err != nil {
 			return err
 		}
 	}
-	if mapping.locked {
-		if err := mapping.Unlock(); err != nil {
+	if m.locked {
+		if err := m.Unlock(); err != nil {
 			return err
 		}
 	}
 
-	if err := munmap(mapping.alignedAddress, mapping.alignedLength); err != nil {
+	if err := munmap(m.alignedAddress, m.alignedLength); err != nil {
 		return os.NewSyscallError("munmap", err)
 	}
-	*mapping = Mapping{}
-	runtime.SetFinalizer(mapping, nil)
+	*m = Mapping{}
+	runtime.SetFinalizer(m, nil)
 	return nil
 }

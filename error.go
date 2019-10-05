@@ -2,65 +2,74 @@ package mmap
 
 import "fmt"
 
-// Error occurred when mapping is closed.
+// ErrorCloses is an error which returns when tries to access the closed mapping.
 type ErrorClosed struct{}
 
+// Implementation of the error interface.
 func (err *ErrorClosed) Error() string {
 	return "mmap: mapping closed"
 }
 
-// Error occurred when operation is illegal.
+// ErrorIllegalOperation is an error which returned when tries to execute illegal operation for the mapping.
 type ErrorIllegalOperation struct{ Operation string }
 
+// Implementation of the error interface.
 func (err *ErrorIllegalOperation) Error() string {
 	return fmt.Sprintf("mmap: illegal operation (%s)", err.Operation)
 }
 
-// Error occurred when mapping mode is invalid.
-type ErrorInvalidMode struct{ Mode Mode }
-
-func (err *ErrorInvalidMode) Error() string {
-	return fmt.Sprintf("mmap: invalid mode 0x%x", err.Mode)
-}
-
-// Error occurred when offset is invalid.
-type ErrorInvalidOffset struct{ Offset int64 }
-
-func (err *ErrorInvalidOffset) Error() string {
-	return fmt.Sprintf("mmap: invalid offset 0x%x", err.Offset)
-}
-
-// Error occurred when length is invalid.
+// ErrorInvalidLength is an error which returned when specified length is invalid.
 type ErrorInvalidLength struct{ Length uintptr }
 
+// Implementation of the error interface.
 func (err *ErrorInvalidLength) Error() string {
 	return fmt.Sprintf("mmap: invalid length %d", err.Length)
 }
 
-// Error occurred when mapping memory pages are already locked.
+// ErrorInvalidMode is an error which returned when mapping mode is invalid.
+type ErrorInvalidMode struct{ Mode Mode }
+
+// Implementation of the error interface.
+func (err *ErrorInvalidMode) Error() string {
+	return fmt.Sprintf("mmap: invalid mode 0x%x", err.Mode)
+}
+
+// ErrorInvalidOffset is an error which returned when specified offset is invalid.
+type ErrorInvalidOffset struct{ Offset int64 }
+
+// Implementation of the error interface.
+func (err *ErrorInvalidOffset) Error() string {
+	return fmt.Sprintf("mmap: invalid offset 0x%x", err.Offset)
+}
+
+// ErrorLocked is an error which returned when mapping memory pages were already locked.
 type ErrorLocked struct{}
 
+// Implementation of the error interface.
 func (err *ErrorLocked) Error() string {
 	return "mmap: mapping locked"
 }
 
-// Error occurred when transaction is not started.
-type ErrorTransactionNotStarted struct{}
+// ErrorPartialCommit is an error which returned when the transaction was committed partially.
+type ErrorPartialCommit struct{ BytesCommitted int }
 
-func (err *ErrorTransactionNotStarted) Error() string {
-	return "mmap: transaction not started"
+// Implementation of the error interface.
+func (err *ErrorPartialCommit) Error() string {
+	return fmt.Sprintf("mmap: partial commit (%d bytes)", err.BytesCommitted)
 }
 
-// Error occurred when transaction is already started.
-type ErrorTransactionStarted struct{}
+// ErrorTransactionClosed is an error which returned when tries to access the closed transaction.
+type ErrorTransactionClosed struct{}
 
-func (err *ErrorTransactionStarted) Error() string {
-	return "mmap: transaction started"
+// Implementation of the error interface.
+func (err *ErrorTransactionClosed) Error() string {
+	return fmt.Sprintf("mmap: transaction closed")
 }
 
-// Error occurred when mapping memory pages are not locked.
+// ErrorUnlocked is an error which returned when mapping memory pages were not locked.
 type ErrorUnlocked struct{}
 
+// Implementation of the error interface.
 func (err *ErrorUnlocked) Error() string {
 	return "mmap: mapping unlocked"
 }
